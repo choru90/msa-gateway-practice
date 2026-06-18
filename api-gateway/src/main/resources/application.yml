@@ -1,0 +1,21 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false   # 명시적 라우팅만 사용 (자동 라우팅 비활성화)
+      routes:
+        - id: order-service
+          uri: lb://ORDER-SERVICE   # Eureka 이름으로 로드밸런싱
+          predicates:
+            - Path=/order/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
