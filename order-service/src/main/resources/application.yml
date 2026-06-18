@@ -1,0 +1,14 @@
+server:
+  port: 0   # 랜덤 포트 (인스턴스 여러 개 띄워 LB 확인하기 위함)
+
+spring:
+  application:
+    name: order-service   # Eureka 등록 이름 → Gateway에서 lb://ORDER-SERVICE 로 참조
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    # 랜덤 포트 사용 시 인스턴스 ID가 겹치지 않도록 고유화
+    instance-id: ${spring.application.name}:${random.uuid}
