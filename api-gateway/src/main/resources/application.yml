@@ -14,8 +14,16 @@ spring:
           uri: lb://ORDER-SERVICE   # Eureka 이름으로 로드밸런싱
           predicates:
             - Path=/order/**
+        - id: member-service
+          uri: lb://MEMBER-SERVICE
+          predicates:
+            - Path=/member/**
 
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+
+jwt:
+  # member-service와 반드시 동일한 시크릿 (대칭키 HS256)
+  secret: my-super-secret-key-for-jwt-hs256-which-is-at-least-32-bytes-long
