@@ -1,0 +1,18 @@
+server:
+  port: 0
+
+spring:
+  application:
+    name: member-service
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    instance-id: ${spring.application.name}:${random.uuid}
+
+jwt:
+  # Gateway(JwtValidator)와 반드시 동일한 시크릿이어야 검증 가능 (대칭키 HS256)
+  secret: my-super-secret-key-for-jwt-hs256-which-is-at-least-32-bytes-long
+  expiration-millis: 3600000   # 1시간
