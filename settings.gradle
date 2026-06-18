@@ -1,0 +1,6 @@
+rootProject.name = 'msa-gateway-practice'
+
+include 'eureka-server'
+include 'order-service'
+include 'member-service'
+include 'api-gateway'
