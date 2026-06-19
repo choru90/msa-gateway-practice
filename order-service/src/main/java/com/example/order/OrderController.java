@@ -1,5 +1,6 @@
 package com.example.order;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/order")
 public class OrderController {
@@ -48,6 +50,8 @@ public class OrderController {
             @PathVariable String id,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
         // X-User-Id는 Gateway의 JWT 인증 필터가 토큰에서 추출해 넣어주는 헤더 (Task 6)
+        // 이 로그 라인은 요청 처리 스레드에서 찍히므로 Brave가 MDC에 traceId/spanId를 채워준다 → Zipkin trace와 상관관계
+        log.info("주문 조회 처리: orderId={}, requestedBy={}", id, userId);
         return Map.of(
                 "orderId", id,
                 "handledByPort", String.valueOf(portHolder.getPort()),
