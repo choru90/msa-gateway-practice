@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: api-gateway
+  data:
+    redis:                  # RequestRateLimiter가 토큰 버킷 상태를 저장하는 Redis
+      host: localhost
+      port: 6379
   cloud:
     gateway:
       discovery:
@@ -14,6 +18,14 @@ spring:
           uri: lb://ORDER-SERVICE   # Eureka 이름으로 로드밸런싱
           predicates:
             - Path=/order/**
+          filters:
+            # 기능 4: Rate Limiting (토큰 버킷, Redis 저장)
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userKeyResolver}"        # 사용자/IP 기준 버킷
+                redis-rate-limiter.replenishRate: 2        # 초당 보충 토큰(=평균 허용 RPS)
+                redis-rate-limiter.burstCapacity: 4        # 버킷 최대치(순간 버스트 허용량)
+                redis-rate-limiter.requestedTokens: 1      # 요청당 소모 토큰
         - id: member-service
           uri: lb://MEMBER-SERVICE
           predicates:
