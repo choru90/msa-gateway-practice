@@ -16,3 +16,16 @@ jwt:
   # Gateway(JwtValidator)와 반드시 동일한 시크릿이어야 검증 가능 (대칭키 HS256)
   secret: my-super-secret-key-for-jwt-hs256-which-is-at-least-32-bytes-long
   expiration-millis: 3600000   # 1시간
+
+# Phase 3: 분산 추적
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"

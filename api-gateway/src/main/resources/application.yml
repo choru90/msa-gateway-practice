@@ -61,3 +61,16 @@ resilience4j:
       orderCircuitBreaker:
         timeout-duration: 2s                         # 2초 넘으면 타임아웃 → 실패로 집계 → fallback
         cancel-running-future: true
+
+# Phase 3: 분산 추적 — 게이트웨이가 trace를 시작하고 B3 헤더로 다운스트림에 전파
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"

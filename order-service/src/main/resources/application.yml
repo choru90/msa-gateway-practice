@@ -12,3 +12,17 @@ eureka:
   instance:
     # 랜덤 포트 사용 시 인스턴스 ID가 겹치지 않도록 고유화
     instance-id: ${spring.application.name}:${random.uuid}
+
+# Phase 3: 분산 추적
+management:
+  tracing:
+    sampling:
+      probability: 1.0   # 학습용으로 모든 요청 추적 (운영은 보통 0.1 등으로 샘플링)
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+
+logging:
+  pattern:
+    # 로그에 traceId/spanId를 찍어 Zipkin trace와 로그를 상관관계로 연결
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"
