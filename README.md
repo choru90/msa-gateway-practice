@@ -1,6 +1,6 @@
 # msa-gateway-practice
 
-MSA **API Gateway 패턴** 학습 프로젝트 (Phase 1 + Phase 2). Spring Cloud Gateway + Eureka 기반.
+MSA **API Gateway 패턴** 학습 프로젝트 (Phase 1 ~ Phase 3). Spring Cloud Gateway + Eureka 기반.
 
 ## 아키텍처
 
@@ -15,6 +15,8 @@ MSA **API Gateway 패턴** 학습 프로젝트 (Phase 1 + Phase 2). Spring Cloud
          ▲                         ▲
    [Eureka :8761]            [Redis :6379]  ← 토큰 버킷 상태 저장
    서비스 등록/디스커버리
+
+   모든 서비스 ──(B3 헤더로 traceId 전파)──▶ [Zipkin :9411]  ← 분산 추적 수집/시각화
 ```
 
 ## 모듈
@@ -42,20 +44,30 @@ MSA **API Gateway 패턴** 학습 프로젝트 (Phase 1 + Phase 2). Spring Cloud
    다운스트림이 느리거나(타임아웃) 실패율이 임계치를 넘으면 회로를 열어 빠르게 차단하고,
    `/fallback/order` 로 forward 해 **503 DEGRADED** 기본 응답을 반환.
 
+### Phase 3
+6. **분산 추적(Distributed Tracing)** — Micrometer Tracing(Brave) → Zipkin.
+   게이트웨이가 요청마다 `traceId`를 시작하고 **B3 헤더로 다운스트림에 전파**하여,
+   `클라이언트→게이트웨이→order-service` 흐름이 하나의 trace(여러 span)로 Zipkin에 모인다.
+   로그 패턴에 `traceId/spanId`를 찍어 **로그 ↔ Zipkin trace 상관관계**도 연결.
+   (Phase 1의 수제 `X-Request-Id`가 서비스 경계를 넘는 표준 추적으로 진화한 셈)
+
 ## 기술 스택
 
 Java 17 · Gradle(멀티모듈) · Spring Boot 3.3.4 · Spring Cloud 2023.0.3 ·
 Spring Cloud Gateway(WebFlux) · Netflix Eureka · jjwt 0.12.6 ·
-**Redis(reactive) · Resilience4j**
+**Redis(reactive) · Resilience4j · Micrometer Tracing(Brave) · Zipkin**
 
 ## 사전 준비
 
-Rate Limiting은 Redis가 필요합니다 (게이트웨이가 `localhost:6379` 사용).
+Rate Limiting은 Redis, 분산 추적은 Zipkin이 필요합니다.
 
 ```bash
-redis-server                       # 로컬 설치 시
-# 또는
-docker run -d -p 6379:6379 redis   # 도커
+# Redis (게이트웨이가 localhost:6379 사용)
+redis-server                              # 로컬 설치 시
+docker run -d -p 6379:6379 redis          # 또는 도커
+
+# Zipkin (모든 서비스가 localhost:9411 로 span 전송)
+docker run -d -p 9411:9411 openzipkin/zipkin
 ```
 
 ## 실행 순서
@@ -104,6 +116,14 @@ curl -s -w '\nhttp=%{http_code} time=%{time_total}s\n' \
 
 # (정상 속도는 통과)
 curl -s "http://localhost:8000/order/slow?delayMillis=200" -H "Authorization: Bearer $TOKEN"
+
+# 7) 분산 추적: 요청을 흘린 뒤 Zipkin에서 trace 확인
+curl -s http://localhost:8000/order/1 -H "Authorization: Bearer $TOKEN" >/dev/null
+#   - 웹 UI: http://localhost:9411  (serviceName=api-gateway 검색)
+#   - 보고된 서비스 목록
+curl -s http://localhost:9411/api/v2/services
+#   하나의 trace에 api-gateway(SERVER/CLIENT) + order-service(SERVER) span이 같은 traceId로 묶임.
+#   order-service 콘솔 로그의 [order-service,<traceId>,<spanId>] 가 Zipkin trace와 동일한 traceId.
 ```
 
 ## 테스트
@@ -123,3 +143,5 @@ curl -s "http://localhost:8000/order/slow?delayMillis=200" -H "Authorization: Be
 - `server.port=0`(랜덤) 환경에서 실제 포트는 `WebServerInitializedEvent`로 얻는다(`@Value("${server.port}")`는 "0" 반환).
 - **토큰 버킷(Rate Limiting):** `burstCapacity`만큼 순간 허용, 초당 `replenishRate`로 보충. 상태를 Redis에 저장해 게이트웨이가 여러 대여도 한도를 공유한다. 키는 `KeyResolver`가 결정(사용자/IP).
 - **CircuitBreaker 상태:** CLOSED(정상) → 실패율 임계 초과 시 OPEN(즉시 차단) → `wait-duration` 후 HALF_OPEN(소수 시험) → 회복 시 CLOSED. `TimeLimiter`의 타임아웃도 '실패'로 집계된다. RateLimit을 CircuitBreaker보다 앞에 둬서 429(정상적 거절)가 회로 실패로 잡히지 않게 한다.
+- **분산 추적:** Spring Boot 3에서 옛 Spring Cloud Sleuth가 **Micrometer Tracing**으로 통합됐다. `bridge-brave`(추적 API↔Brave) + `zipkin-reporter-brave`(span 전송) + `actuator`(HTTP 자동 관측)가 한 세트. trace 컨텍스트는 **B3 HTTP 헤더**로 서비스 간 전파된다(`traceId` 공유, 각 구간은 별도 `spanId`).
+- **추적 vs 로그 상관관계:** servlet 서비스(order-service)는 요청 스레드의 MDC에 traceId가 채워져 로그에 그대로 찍힌다. 반면 **reactive 게이트웨이**는 trace 컨텍스트가 thread-local이 아닌 Reactor 컨텍스트에 있어 `%X{traceId}` 로그가 비어 있을 수 있다 — 게이트웨이 구간은 Zipkin UI로 보는 게 정확하다.
