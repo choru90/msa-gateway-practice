@@ -26,6 +26,11 @@ spring:
                 redis-rate-limiter.replenishRate: 2        # 초당 보충 토큰(=평균 허용 RPS)
                 redis-rate-limiter.burstCapacity: 4        # 버킷 최대치(순간 버스트 허용량)
                 redis-rate-limiter.requestedTokens: 1      # 요청당 소모 토큰
+            # 기능 5: 회복탄력성 (CircuitBreaker + 타임아웃, 실패 시 fallback 으로 forward)
+            - name: CircuitBreaker
+              args:
+                name: orderCircuitBreaker
+                fallbackUri: forward:/fallback/order
         - id: member-service
           uri: lb://MEMBER-SERVICE
           predicates:
@@ -39,3 +44,20 @@ eureka:
 jwt:
   # member-service와 반드시 동일한 시크릿 (대칭키 HS256)
   secret: my-super-secret-key-for-jwt-hs256-which-is-at-least-32-bytes-long
+
+# 기능 5: Resilience4j — 위 CircuitBreaker 필터의 name(orderCircuitBreaker)과 인스턴스명이 일치해야 함
+resilience4j:
+  circuitbreaker:
+    instances:
+      orderCircuitBreaker:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 5                       # 최근 5건으로 실패율 계산
+        minimum-number-of-calls: 5                   # 최소 5건 모여야 차단 판단 시작
+        failure-rate-threshold: 50                   # 실패율 50% 이상이면 OPEN(차단)
+        wait-duration-in-open-state: 10s             # OPEN 유지 후 HALF_OPEN 으로 시험
+        permitted-number-of-calls-in-half-open-state: 2
+  timelimiter:
+    instances:
+      orderCircuitBreaker:
+        timeout-duration: 2s                         # 2초 넘으면 타임아웃 → 실패로 집계 → fallback
+        cancel-running-future: true
